@@ -6,7 +6,7 @@ import math
 from PIL import Image
 
 st.set_page_config(
-    page_title="Video to GIF Converter",
+    page_title="동영상 GIF 변환기",
     page_icon="🎞️",
     layout="centered"
 )
