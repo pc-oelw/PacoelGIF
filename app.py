@@ -5,19 +5,22 @@
 # streamlit은 파이썬으로 웹사이트를 만들 수 있게 해주는 라이브러리입니다.
 import streamlit as st
 
-# VideoFileClip은 동영상 파일을 불러오고, 자르고, 변환할 때 사용합니다.
-#
-# 중요:
-# Streamlit Cloud에서는 아래처럼 moviepy.editor에서 가져오는 방식이 안정적입니다.
-# from moviepy import VideoFileClip 이라고 쓰면 오류가 날 수 있습니다.
-from moviepy.editor import VideoFileClip
+# imageio는 동영상 파일에서 프레임을 읽고,
+# 여러 이미지를 GIF로 저장할 때 사용합니다.
+import imageio
 
 # tempfile은 임시 파일을 만들 때 사용합니다.
-# 사용자가 업로드한 동영상을 잠깐 저장하기 위해 필요합니다.
+# 업로드한 동영상을 잠깐 저장하기 위해 필요합니다.
 import tempfile
 
 # os는 파일 삭제, 파일 존재 여부 확인 등에 사용합니다.
 import os
+
+# math는 계산할 때 사용합니다.
+import math
+
+# PIL은 이미지 크기를 줄일 때 사용합니다.
+from PIL import Image
 
 
 # ==============================
@@ -25,9 +28,9 @@ import os
 # ==============================
 
 st.set_page_config(
-    page_title="Video to GIF Converter",  # 브라우저 탭에 보이는 제목
-    page_icon="🎞️",                      # 브라우저 탭 아이콘
-    layout="centered"                    # 화면 레이아웃
+    page_title="Video to GIF Converter",
+    page_icon="🎞️",
+    layout="centered"
 )
 
 
@@ -38,12 +41,12 @@ st.set_page_config(
 st.title("🎞️ 동영상 → GIF 변환기")
 
 st.write(
-    "동영상 파일을 업로드한 뒤, 원하는 구간을 선택해서 GIF로 변환할 수 있습니다."
+    "동영상 파일을 업로드하고 원하는 구간을 선택해서 GIF로 변환할 수 있습니다."
 )
 
 
 # ==============================
-# 동영상 파일 업로드
+# 파일 업로드
 # ==============================
 
 uploaded_file = st.file_uploader(
@@ -58,33 +61,44 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    # 사용자가 업로드한 파일은 Streamlit 내부의 UploadedFile 형태입니다.
-    # MoviePy는 실제 파일 경로가 있어야 동영상을 읽을 수 있기 때문에,
-    # 업로드한 파일을 임시 파일로 저장합니다.
-    #
-    # delete=False:
-    # 임시 파일을 자동으로 삭제하지 않고,
-    # 나중에 우리가 직접 삭제하겠다는 뜻입니다.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
+    # 업로드한 파일의 확장자를 가져옵니다.
+    # 예: video.mp4 → .mp4
+    file_extension = os.path.splitext(uploaded_file.name)[1]
+
+    # 업로드한 동영상을 임시 파일로 저장합니다.
+    # imageio가 동영상을 읽으려면 실제 파일 경로가 필요하기 때문입니다.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_video:
         temp_video.write(uploaded_file.read())
         video_path = temp_video.name
 
-    # 업로드한 동영상을 웹페이지에서 미리보기로 보여줍니다.
+    # 업로드한 동영상을 화면에서 미리 볼 수 있게 보여줍니다.
     st.video(video_path)
 
     try:
         # ==============================
-        # 동영상 파일 불러오기
+        # 동영상 정보 읽기
         # ==============================
 
-        # MoviePy로 동영상을 불러옵니다.
-        video = VideoFileClip(video_path)
+        # imageio로 동영상 파일을 읽습니다.
+        reader = imageio.get_reader(video_path, "ffmpeg")
 
-        # 동영상 전체 길이를 초 단위로 가져옵니다.
-        duration = video.duration
+        # 동영상의 메타데이터를 가져옵니다.
+        metadata = reader.get_meta_data()
 
-        # 영상 길이를 사용자에게 보여줍니다.
-        st.info(f"영상 길이: {duration:.2f}초")
+        # 원본 영상의 FPS를 가져옵니다.
+        # FPS는 1초에 몇 장의 프레임이 있는지를 뜻합니다.
+        video_fps = metadata.get("fps", 30)
+
+        # 영상 길이를 가져옵니다.
+        # 일부 파일은 duration 정보가 없을 수 있습니다.
+        duration = metadata.get("duration", None)
+
+        if duration is None or duration == float("inf"):
+            st.warning("영상 길이를 자동으로 읽지 못했습니다. 짧은 영상 위주로 사용해 주세요.")
+            duration = 10.0
+
+        st.info(f"영상 길이: 약 {duration:.2f}초")
+        st.info(f"원본 FPS: {video_fps:.2f}")
 
 
         # ==============================
@@ -93,7 +107,6 @@ if uploaded_file is not None:
 
         st.subheader("GIF 설정")
 
-        # GIF로 만들 시작 시간을 입력받습니다.
         start_time = st.number_input(
             "시작 시간(초)",
             min_value=0.0,
@@ -102,10 +115,6 @@ if uploaded_file is not None:
             step=0.1
         )
 
-        # GIF로 만들 끝 시간을 입력받습니다.
-        #
-        # 기본값은 5초입니다.
-        # 단, 영상이 5초보다 짧으면 영상 끝까지로 설정합니다.
         end_time = st.number_input(
             "끝 시간(초)",
             min_value=0.1,
@@ -114,27 +123,13 @@ if uploaded_file is not None:
             step=0.1
         )
 
-        # FPS는 1초에 몇 장의 이미지가 들어가는지 뜻합니다.
-        #
-        # FPS가 높으면:
-        # - GIF가 더 부드러움
-        # - 대신 용량이 커짐
-        #
-        # FPS가 낮으면:
-        # - GIF가 덜 부드러움
-        # - 대신 용량이 작아짐
-        fps = st.slider(
+        gif_fps = st.slider(
             "GIF 프레임 수(FPS)",
             min_value=5,
             max_value=30,
             value=12
         )
 
-        # GIF의 가로 크기를 선택합니다.
-        #
-        # 크기가 클수록:
-        # - 화질이 좋아짐
-        # - 대신 용량이 커지고 변환 시간이 길어짐
         width = st.slider(
             "GIF 가로 크기(px)",
             min_value=200,
@@ -143,14 +138,18 @@ if uploaded_file is not None:
             step=20
         )
 
+        st.caption("GIF는 길이, FPS, 크기가 커질수록 용량이 빠르게 커집니다.")
+
 
         # ==============================
         # 입력값 검사
         # ==============================
 
-        # 끝 시간이 시작 시간보다 작거나 같으면 변환할 수 없습니다.
         if end_time <= start_time:
             st.error("끝 시간은 시작 시간보다 커야 합니다.")
+
+        elif end_time - start_time > 15:
+            st.warning("GIF 구간이 너무 길면 변환이 느리거나 실패할 수 있습니다. 15초 이하를 추천합니다.")
 
         else:
             # ==============================
@@ -159,87 +158,88 @@ if uploaded_file is not None:
 
             if st.button("GIF 변환하기"):
 
-                # 변환 중이라는 표시를 띄웁니다.
                 with st.spinner("GIF로 변환 중입니다..."):
 
-                    # 변환된 GIF를 저장할 임시 파일 경로를 만듭니다.
+                    # 결과 GIF를 저장할 임시 파일 경로를 만듭니다.
                     output_path = tempfile.NamedTemporaryFile(
                         delete=False,
                         suffix=".gif"
                     ).name
 
-                    # ==============================
-                    # 동영상 구간 자르기
-                    # ==============================
+                    # 시작 프레임과 끝 프레임을 계산합니다.
+                    start_frame = int(start_time * video_fps)
+                    end_frame = int(end_time * video_fps)
 
-                    # 사용자가 선택한 시작 시간 ~ 끝 시간만 잘라냅니다.
-                    clip = video.subclip(start_time, end_time)
+                    # 원본 FPS에서 GIF FPS에 맞게 프레임을 건너뛰기 위한 값입니다.
+                    # 예: 원본 30fps, GIF 10fps면 3프레임마다 1장씩 사용합니다.
+                    frame_step = max(1, int(video_fps / gif_fps))
 
-                    # ==============================
-                    # GIF 크기 조절
-                    # ==============================
+                    frames = []
 
-                    # 가로 크기를 사용자가 선택한 값으로 변경합니다.
-                    # 세로 크기는 원본 비율에 맞게 자동으로 조절됩니다.
-                    clip = clip.resize(width=width)
+                    # 사용할 총 프레임 수를 계산합니다.
+                    total_frames = max(1, math.ceil((end_frame - start_frame) / frame_step))
 
-                    # ==============================
-                    # GIF 파일로 저장
-                    # ==============================
+                    # 진행률 표시 바입니다.
+                    progress_bar = st.progress(0)
 
-                    # 잘라낸 동영상 클립을 GIF 파일로 저장합니다.
-                    clip.write_gif(
-                        output_path,
-                        fps=fps
-                    )
+                    # 선택한 구간의 프레임을 읽습니다.
+                    for index, frame_number in enumerate(range(start_frame, end_frame, frame_step)):
 
-                    # 변환이 완료되었다는 메시지
-                    st.success("GIF 변환 완료!")
+                        # 특정 번호의 프레임을 가져옵니다.
+                        frame = reader.get_data(frame_number)
 
-                    # 변환된 GIF 미리보기
-                    st.image(output_path)
+                        # numpy 배열 형태의 프레임을 PIL 이미지로 변환합니다.
+                        image = Image.fromarray(frame)
 
-                    # ==============================
-                    # GIF 다운로드 버튼
-                    # ==============================
+                        # 원본 비율을 유지하면서 가로 크기를 줄입니다.
+                        original_width, original_height = image.size
+                        ratio = width / original_width
+                        new_height = int(original_height * ratio)
 
-                    # GIF 파일을 rb 모드로 읽습니다.
-                    # rb는 read binary, 즉 바이너리 파일 읽기라는 뜻입니다.
-                    with open(output_path, "rb") as gif_file:
-                        st.download_button(
-                            label="GIF 다운로드",
-                            data=gif_file,
-                            file_name="converted.gif",
-                            mime="image/gif"
+                        image = image.resize((width, new_height))
+
+                        # GIF에 넣을 프레임 목록에 추가합니다.
+                        frames.append(image)
+
+                        # 진행률 업데이트
+                        progress = min(1.0, (index + 1) / total_frames)
+                        progress_bar.progress(progress)
+
+                    # 프레임이 하나도 없으면 오류를 보여줍니다.
+                    if len(frames) == 0:
+                        st.error("GIF로 만들 프레임을 가져오지 못했습니다.")
+
+                    else:
+                        # 프레임들을 GIF 파일로 저장합니다.
+                        imageio.mimsave(
+                            output_path,
+                            frames,
+                            format="GIF",
+                            fps=gif_fps
                         )
 
-                    # 사용이 끝난 clip을 닫습니다.
-                    # 파일 점유를 해제하기 위해 필요합니다.
-                    clip.close()
+                        st.success("GIF 변환 완료!")
 
-        # 사용이 끝난 원본 영상 객체를 닫습니다.
-        video.close()
+                        # 변환된 GIF 미리보기
+                        st.image(output_path)
 
+                        # GIF 다운로드 버튼
+                        with open(output_path, "rb") as gif_file:
+                            st.download_button(
+                                label="GIF 다운로드",
+                                data=gif_file,
+                                file_name="converted.gif",
+                                mime="image/gif"
+                            )
+
+        # 동영상 reader를 닫습니다.
+        reader.close()
 
     except Exception as e:
-        # ==============================
-        # 오류 처리
-        # ==============================
-
-        # 변환 중 오류가 나면 사용자에게 알려줍니다.
         st.error("변환 중 오류가 발생했습니다.")
-
-        # 실제 오류 내용을 보여줍니다.
-        # 공부할 때는 오류 내용을 확인하는 게 중요해서 표시합니다.
         st.code(str(e))
 
-
     finally:
-        # ==============================
-        # 임시 파일 삭제
-        # ==============================
-
-        # 업로드한 영상을 임시 파일로 저장했기 때문에,
-        # 작업이 끝나면 삭제해서 서버 용량을 아낍니다.
+        # 임시로 저장한 동영상 파일을 삭제합니다.
         if os.path.exists(video_path):
             os.remove(video_path)
