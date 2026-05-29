@@ -10,12 +10,12 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎞️ 동영상 → GIF 변환기")
-st.write("동영상 파일을 업로드하고 원하는 구간을 GIF로 변환하세요.")
+st.title("동영상 GIF 변환기")
+st.write("동영상 파일을 업로드하고 원하는 구간을 선택해 GIF로 변환하세요.")
 
 
 uploaded_file = st.file_uploader(
-    "동영상 파일 업로드",
+    "파일 업로드",
     type=["mp4", "mov", "avi", "mkv", "webm"]
 )
 
