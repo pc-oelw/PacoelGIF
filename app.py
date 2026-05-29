@@ -6,7 +6,7 @@ import math
 from PIL import Image
 
 st.set_page_config(
-    page_title="동영상 GIF 변환기",
+    page_title="GIF 변환기",
     page_icon="🎞️",
     layout="centered"
 )
@@ -17,26 +17,23 @@ if "gif_data" not in st.session_state:
 if "gif_ready" not in st.session_state:
     st.session_state.gif_ready = False
 
+if "last_file_name" not in st.session_state:
+    st.session_state.last_file_name = None
+
 st.title("GIF 변환기")
-st.write("동영상을 업로드하고 원하는 구간을 GIF로 변환하세요.")
+st.write("동영상 파일을 업로드하고 원하는 구간을 GIF로 변환할 수 있습니다.")
 
 uploaded_file = st.file_uploader(
-    "동영상 업로드",
+    "동영상 파일 업로드",
     type=["mp4", "mov", "avi", "mkv", "webm"]
 )
 
 if uploaded_file is not None:
-    current_file_name = uploaded_file.name
-
-    if "last_file_name" not in st.session_state:
-        st.session_state.last_file_name = current_file_name
-
-    if st.session_state.last_file_name != current_file_name:
+    if st.session_state.last_file_name != uploaded_file.name:
         st.session_state.gif_data = None
         st.session_state.gif_ready = False
-        st.session_state.last_file_name = current_file_name
+        st.session_state.last_file_name = uploaded_file.name
 
-if uploaded_file is not None:
     file_extension = os.path.splitext(uploaded_file.name)[1]
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_video:
@@ -94,7 +91,7 @@ if uploaded_file is not None:
 
         else:
             if st.button("GIF 변환하기"):
-                with st.spinner("GIF로 변환 중..."):
+                with st.spinner("GIF 변환 중..."):
                     output_path = tempfile.NamedTemporaryFile(
                         delete=False,
                         suffix=".gif"
