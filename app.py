@@ -18,7 +18,7 @@ if "gif_ready" not in st.session_state:
     st.session_state.gif_ready = False
 
 st.title("GIF 변환기")
-st.write("동영상을 업로드하고 원하는 구간을 GIF로 변환하세요..")
+st.write("동영상을 업로드하고 원하는 구간을 GIF로 변환하세요.")
 
 uploaded_file = st.file_uploader(
     "동영상 업로드",
